@@ -162,7 +162,6 @@ void handle_tx_timer(void)
 
 	if(has_delay_passed(tx_time.bms,TX_PERIOD_BMS))						tx_ready.bms = true; //SYS_CONSOLE_PRINT("bms tx");
 	else																tx_ready.bms = false;
-
     if(has_delay_passed(tx_time.status,TX_PERIOD_STATUS))				tx_ready.status = true; //SYS_CONSOLE_PRINT("status tx");
 	else																tx_ready.status = false;
 }

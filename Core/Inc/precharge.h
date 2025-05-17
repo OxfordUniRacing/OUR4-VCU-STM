@@ -9,10 +9,13 @@ typedef struct {
 	float current;
 	bool ams_precharge_enabled;
 
-	uint16_t pack_dlc;	// Max current the battery can output
 
 	// Outputs
 	bool precharge_enable;
+	uint16_t pack_dlc;	// Max current the battery can output
+	uint16_t high_temp;
+	uint16_t low_temp;
+	uint16_t SOC;
 } bms_t;
 
 extern bms_t bms;

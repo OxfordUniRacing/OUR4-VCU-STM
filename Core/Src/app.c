@@ -165,7 +165,6 @@ void app_main(void)
 
 void handle_car_control(void)
 {
-	static bool sounder_enable;
 	static uint32_t sounder_on_time;
 
 	//Hanlde Ignition
@@ -195,10 +194,10 @@ void handle_car_control(void)
 		}
 		else
 		{
-			if(!car_control.RTD && !sounder_enable && !car_control.error_state)
+			if(!car_control.RTD && !car_control.sounder_enable && !car_control.error_state)
 			{
 				// set timer for sounder
-				sounder_enable = true;
+				car_control.sounder_enable = true;
 				sounder_on_time = current_time_ms();
 			}
 		}
@@ -215,7 +214,7 @@ void handle_car_control(void)
 #endif
 		if(has_delay_passed(sounder_on_time, SOUNDER_ON_TIME))
 		{
-			sounder_enable = false;
+			car_control.sounder_enable = false;
 			car_control.RTD = true;
 		}
 	}
@@ -227,7 +226,7 @@ void handle_car_control(void)
 
 	if(car_control.RTD)
 	{
-		car_control.torque = 0; // Need to add in torque calculation
+		car_control.torque = car_control.user_pedal_value * 32 / 100;
 		// 0.0625Nm/bit 16 bits/Nm
 	}
 	else
@@ -267,7 +266,7 @@ void handle_emsdc(void)
 			car_control.inverter_state = INV_SHUTDOWN;
 			if(!old_ass_error) ass_error_time = current_time_ms();
 
-			if(has_delay_passed(ass_error_time,100) | bms.current < 5)	// we have waited for 100ms, or the bms current is low enough, then we turn off the emsdc
+			if(has_delay_passed(ass_error_time,100) || (bms.current < 5))	// we have waited for 100ms, or the bms current is low enough, then we turn off the emsdc
 			{
 				ass_state = false;
 			}
@@ -279,10 +278,20 @@ void handle_emsdc(void)
 		{
 			ass_state = true;
 		}
+		if(ass.precharge_request_close && ass_error)
+		{
+			//printf("ASS ERROR\n\r");
+		}
 	}
 
-
-	HAL_GPIO_WritePin(GPIOC,PUSH_PULL_1_Pin, ass_state);
+	if(ass_state)
+	{
+		HAL_GPIO_WritePin(GPIOC,PUSH_PULL_1_Pin, GPIO_PIN_SET);
+	}
+	else
+	{
+		HAL_GPIO_WritePin(GPIOC,PUSH_PULL_1_Pin, GPIO_PIN_RESET);
+	}
 
 
 	old_ass_error = ass_error;

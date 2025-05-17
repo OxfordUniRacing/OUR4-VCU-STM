@@ -153,7 +153,8 @@ void handle_precharge(void)
                 PRECHARGE_STATE = PC_WAIT_FOR_INVERTER;
                 printf("PC_BMS_RELAY_SUCCESS\n\r");
             }
-            if(has_delay_passed(precharge_start_time,2000))
+            //if(has_delay_passed(precharge_start_time,2000))
+            if(false)
 			{
                 PRECHARGE_STATE = PC_FAILED;
                 printf("PC_BMS_RELAY_FAIL\n\r");
@@ -243,7 +244,7 @@ void handle_precharge(void)
 			PRECHARGE_STATE = PC_READY;
 #else
 
-			if(		get_inv_lowest_voltage() > bms.voltage * 0.90)
+			if(		get_inv_lowest_voltage() > ((bms.voltage - 7)* 0.99))
 			{
 				PRECHARGE_STATE = PC_WAIT_FOR_PRECHARGE_DISABLE;
                 printf("PC_WAIT_FOR_FINAL_VOLTAGE_SUCCESS\n\r");
@@ -251,7 +252,8 @@ void handle_precharge(void)
 			else
 			{
 				//t = 1000* -RCln(1-0.95) =1000* RCln20 = 3743
-				if(has_delay_passed(precharge_start_time, 10000))
+				//if(has_delay_passed(precharge_start_time, 10000))
+				if(false)
 				{
 					PRECHARGE_STATE = PC_FAILED;
                     printf("PC_WAIT_FOR_FINAL_VOLTAGE_FAIL\n\r");
@@ -309,7 +311,7 @@ void handle_precharge(void)
 		case PC_READY:
 			bms.precharge_enable = false;
 			ass.break_loop_precharge = false;
-			car_control.inverter_state = INV_ENERGISE;
+			car_control.inverter_state = INV_ENABLE;
             car_control.precharge_ready = true;
 
 			break;

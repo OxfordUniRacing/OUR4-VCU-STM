@@ -75,10 +75,9 @@ void handle_can_rx(void)
 		HAL_CAN_GetRxMessage(&hcan1, CAN_RX_FIFO0, &rxHeader, rxData);
 
 
-		if(rxHeader.IDE)
+		if(rxHeader.IDE)	//=============== EXT IDS ======================
 		{
 			uint32_t cropped_id = rxHeader.ExtId & 0x01FFFFFF;
-			//printf("%lx \n\r",cropped_id);
 
 			switch(cropped_id)
 			{
@@ -86,29 +85,37 @@ void handle_can_rx(void)
 					parse_HS1(&inv1, rxData);
 					comms_time.inv1 = current_time_ms();
 					break;
+
 				case CAN_ID_INV1_HS2:
 					parse_HS2(&inv1, rxData);
 					comms_time.inv1 = current_time_ms();
 					break;
+
 				case CAN_ID_INV1_HS3:
 					parse_HS3(&inv1, rxData);
 					comms_time.inv1 = current_time_ms();
 					break;
+
 				case CAN_ID_INV2_HS1:
 					parse_HS1(&inv2, rxData);
 					comms_time.inv2 = current_time_ms();
 					break;
+
 				case CAN_ID_INV2_HS2:
 					parse_HS2(&inv2, rxData);
 					comms_time.inv2 = current_time_ms();
 					break;
+
 				case CAN_ID_INV2_HS3:
 					parse_HS3(&inv2, rxData);
 					comms_time.inv2 = current_time_ms();
 					break;
+
+				default:
+					break;
 			}
 		}
-		else
+		else	//=============== STD IDS ======================
 		{
 			switch(rxHeader.StdId)
 			{
@@ -116,74 +123,35 @@ void handle_can_rx(void)
 					comms_time.steering = current_time_ms();
 					float measurement = (rxData[0]*256 + rxData[1] - 440)/390.0f;
 					car_control.user_steering_value = 0.18f*measurement + car_control.user_steering_value*0.82f;
-					//SYS_CONSOLE_PRINT("Steering value: %d\n\r",car_control.user_steering_value);
-					break;
-
-				case CAN_ID_RELAY_STATE:
-					comms_time.bms = current_time_ms();
-					//SYS_CONSOLE_PRINT("BMS STATE: %d\n\r",rxData[0]);
-					if(rxData[0] >> 7 == 0){
-						bms.ams_precharge_enabled = true;
-					}
-					else{
-						bms.ams_precharge_enabled = false;
-					}
 					break;
 
 				case CAN_ID_BMS_CELL_BROADCAST:
 					bms.voltage = (((uint16_t)rxData[2] << 8) + rxData[3])/10.0f;
 					bms.current = (rxData[0]*256 + rxData[1])/10.0f;
-					break;
-/*
-				case CAN_ID_RTD:
-					comms_time.dash = current_time_ms();
-					bool rtd_switch_state = (!!rxData[0]);
-
-
-					//Wtf does rtd_startup_flag do?...
-
-					if(car_control.precharge_ready && car_control.inverter_params_complete)	//If the invereters + battery is ready to go
+					bms.SOC = rxData[4];
+					if(rxData[5] >> 7 == 0)
 					{
-						if(rtd_startup_flag)			//If startup conditions are good, then continue
-						{
-							if(rtd_switch_state == true && car_control.brake_on && car_control.user_pedal_value == 0)	//If the switch is on, the brakes are on, and there is no pedal demand, then we are ready
-							{
-								car_control.ready_to_drive = true;
-							}
-							else if(rtd_switch_state == false)
-							{
-								car_control.ready_to_drive = false;
-								rtd_startup_flag = car_control.brake_on && car_control.user_pedal_value == 0;
-							}
-						}
-						else{
-							if(rtd_switch_state == false && car_control.brake_on && car_control.user_pedal_value == 0)
-							{
-								rtd_startup_flag = true;
-							}
+						bms.ams_precharge_enabled = true;
+					}
+					else{
+						bms.ams_precharge_enabled = false;
+					}
 
-							//else rtd_startup_flag = false;
-						}
-					}
-					else	//If the battery is not ready then make sure we aren't ready to drive, and the startup flag is false
-					{
-						rtd_startup_flag = false;
-						car_control.ready_to_drive = false;
-					}
+					comms_time.bms = current_time_ms();
 					break;
 
-*/
 				case CAN_ID_BMS_DLC:
 
 					bms.pack_dlc = 0;
 					bms.pack_dlc = (uint16_t)rxData[0] << 8;
 					bms.pack_dlc += rxData[1];
 
-					break;
+					bms.high_temp = rxData[4];
+					bms.low_temp = rxData[5];
 
-				//case CAN_ID_AUX_STATES:
-					//comms_time.bms = current_time_ms();
-				   // break;
+					comms_time.bms = current_time_ms();
+
+					break;
 
 				case CAN_ID_SBG_IMU_DELTA_ANGLE:
 					int16_bytes_converter.bytes[0] = rxData[4];
@@ -212,9 +180,8 @@ void handle_can_rx(void)
 					float v_e_acc = int16_bytes_converter.i*0.01f;
 					car_control.v_acc = (v_n_acc+v_e_acc)/2;
 					break;
-				case 0x38:
-					break;
-				case 0x6D0:
+
+				default:
 					break;
 			}
 		}

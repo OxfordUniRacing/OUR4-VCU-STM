@@ -40,14 +40,14 @@
 #include "globals.h"
 #include "app.h"
 #include "can.h"
+#include "precharge.h"
 
 
 
 #define TRQ_LIMIT			(10*160)		//160 bits per nm
 #define RPM_LIMIT			(1000)
 
-#define BAT_DISCHARGE_LIM	(10)
-#define BAT_RECHARGE_LIM	(-10)
+#define BAT_RECHARGE_LIM	(-1)
 #define TARGET_CAP_VOLTAGE	(100*16)	//16 bits per V
 
 #define CONTROLWORLD_ENERGISE	(0x0003)
@@ -103,15 +103,14 @@ void transmit_HC1(
 }
 
 
-uint16_t car_torque_limit(void)
+uint16_t car_torque(void)
 {
-	if(car_control.user_pedal_value <= 25) return 0;
-	else return 10;
+	return (uint16_t) car_control.torque * 16;
 
 }
-uint16_t car_rpm_limit(void)
+uint16_t car_rpm(void)
 {
-
+	return 300;
 }
 
 
@@ -121,8 +120,8 @@ uint16_t car_rpm_limit(void)
  */
 void update_HC1_drive(void)
 {
-	transmit_HC1(INV_RIGHT_ADDRESS, -1 * car_torque_limit(), CONTROLWORLD_ENABLE, TRQ_LIMIT);
-	transmit_HC1(INV_LEFT_ADDRESS, car_torque_limit(), CONTROLWORLD_ENABLE, TRQ_LIMIT);
+	transmit_HC1(INV_RIGHT_ADDRESS, -1 * car_torque(), CONTROLWORLD_ENABLE, TRQ_LIMIT);
+	transmit_HC1(INV_LEFT_ADDRESS, car_torque(), CONTROLWORLD_ENABLE, TRQ_LIMIT);
 }
 
 void update_HC1_energise(void)
@@ -159,7 +158,6 @@ void transmit_HC2(
 	data[4] = (uint8_t)(rev_speed_lim);
 	data[5] = (uint8_t)(rev_speed_lim >> 8);
 
-
 	data[6] = 0;		//Not using sequence
 	data[7] = 0;		//Not using checksum
 
@@ -182,8 +180,8 @@ void transmit_HC2(
 
 void update_HC2(void)
 {
-	transmit_HC2(INV_RIGHT_ADDRESS, -1*TRQ_LIMIT, 0, -1 *0);
-	transmit_HC2(INV_LEFT_ADDRESS, -1*TRQ_LIMIT, 0, -1 * 0);
+	transmit_HC2(INV_RIGHT_ADDRESS, -1*TRQ_LIMIT, car_rpm(), -1 * car_rpm());
+	transmit_HC2(INV_LEFT_ADDRESS, -1*TRQ_LIMIT, car_rpm(), -1 * car_rpm());
 }
 
 void transmit_HC3(
@@ -226,8 +224,8 @@ void transmit_HC3(
 
 void update_HC3(void)
 {
-	transmit_HC3(INV_RIGHT_ADDRESS, BAT_DISCHARGE_LIM, BAT_RECHARGE_LIM, TARGET_CAP_VOLTAGE);
-	transmit_HC3(INV_LEFT_ADDRESS, BAT_DISCHARGE_LIM, BAT_RECHARGE_LIM, TARGET_CAP_VOLTAGE);
+	transmit_HC3(INV_RIGHT_ADDRESS, bms.pack_dlc, BAT_RECHARGE_LIM, TARGET_CAP_VOLTAGE);
+	transmit_HC3(INV_LEFT_ADDRESS, bms.pack_dlc, BAT_RECHARGE_LIM, TARGET_CAP_VOLTAGE);
 }
 
 
