@@ -23,10 +23,12 @@
 #define INVERTER_UNDERVOLTAGE_COMMAND        "uv040"
 
 //=============================GLOBAL VAR
+precharge_t PRECHARGE_STATE = PC_TS_OFF;
+
 bms_t bms = {
 	.pack_dlc = 10, //minimum value we can set inverters to
 	.precharge_enable = true,
-	.voltage = 100
+	.voltage = 0
 };
 ass_t ass = { 0 };
 
@@ -50,23 +52,11 @@ static volatile uint32_t parameter_write_start_time = 0;
 void handle_precharge(void)
 {
 
-	static enum {
-		PC_TS_OFF,                      //The TS is not active
-		PC_EMSDC_ON,                   //For handling the BMS relay
-		PC_WAIT_FOR_INVERTER,           //Waiting for communication from the inverters
-		PC_WAIT_FOR_INVERTER_ENERGISE,  //Waiting fot the inverters to enter "energised" state
-		PC_WAIT_FOR_INVERTER_ENABLED,   //Waiting for the inverters to enter "enabled" state
-		PC_WAIT_FOR_FINAL_VOLTAGE,      //Waiting for the inverter voltage to reach 95% of battery voltage
-		PC_WAIT_FOR_PRECHARGE_DISABLE,
-		PC_READY,                       //Ready to for BMS to exit precharge
-		PC_FAILED                       //A timeout has occured, set flag for VCU relay to open
-	} PRECHARGE_STATE = PC_TS_OFF;		//Different possible precharge states
-
 
 
     //Neither does this
     if ((bms.voltage < 75 || bms.voltage > 125) && ts_active() && !car_control.precharge_ready) {
-        PRECHARGE_STATE = PC_FAILED;
+        //PRECHARGE_STATE = PC_FAILED;
     }
 
 	//=======================================================
@@ -114,7 +104,7 @@ void handle_precharge(void)
 			if(car_control.precharge_start)
 			{
 #ifdef DEBUG_IGNORE_BMS
-				PRECHARGE_STATE = PC_WAIT_FOR_INVERTER;
+				PRECHARGE_STATE = PC_EMSDC_ON;
 				precharge_start_time = current_time_ms();
 				printf("PC_TS_OFF_SUCCESS\n\r");
 #else
@@ -151,13 +141,12 @@ void handle_precharge(void)
             if(ts_active())
             {
                 PRECHARGE_STATE = PC_WAIT_FOR_INVERTER;
-                printf("PC_BMS_RELAY_SUCCESS\n\r");
+                printf("PC_EMSDC_SUCCESS\n\r");
             }
-            //if(has_delay_passed(precharge_start_time,2000))
-            if(false)
+            if(has_delay_passed(precharge_start_time,5000))
 			{
                 PRECHARGE_STATE = PC_FAILED;
-                printf("PC_BMS_RELAY_FAIL\n\r");
+                printf("PC_EMSDC_FAIL\n\r");
             }
             break;
 
@@ -175,7 +164,7 @@ void handle_precharge(void)
 			car_control.inverter_state = INV_SHUTDOWN;
 			car_control.precharge_ready = false;
 
-			if(inv1.statusword == STATUSWORD_SHUTDOWN && inv2.statusword == STATUSWORD_SHUTDOWN)
+			if(inv1.statusword == STATUSWORD_NOTREADY && inv2.statusword == STATUSWORD_NOTREADY)
 			{
 				PRECHARGE_STATE = PC_WAIT_FOR_INVERTER_ENERGISE;
                 printf("PC_INVERTER_COMMS_SUCCESS\n\r");

@@ -45,8 +45,6 @@
 
 
 
-
-
 static volatile bool rtd_startup_flag = false;
 
 union {
@@ -250,27 +248,53 @@ void handle_can_tx(void)
 	}
 	else if(tx_ready.status)		//If we are ready to send a message to the dash
 	{
-		/*
-		tx_time.status = current_time_ms();
+		//Things the dash needs to know from the VCU
 
-		uint8_t status_data[] =
-			{
-			ass.break_loop_inverter_error,
-			ass.break_loop_precharge,
-			ass.break_loop_timeout,
-			ass.break_loop_ts_deactive,
-			car_control.ins_error_code,
+		// LV Bat Voltage
+		// Pedal Value
+		// Precharge state
+
+		// RPM Limit
+		// INV current Limit
+		// Torque limit
+
+		// Comms status
+
+		uint8_t status_data[8] =
+		{
+			(uint8_t)(car_control.LV_Bat_voltage),
+			(uint8_t)(car_control.LV_Bat_voltage >> 8),
+			car_control.user_pedal_value,
+			PRECHARGE_STATE,
+			inverter_current_limit(),
 			0,
-			0,
-			(comms_active_snapshot.bms<<5)
-					+(comms_active_snapshot.dash<<4)+(comms_active_snapshot.inv1<<3)
-					+(comms_active_snapshot.inv2<<2)+(comms_active_snapshot.pb<<1)
-					+comms_active_snapshot.steering};
+			(car_control.RTD_Switch 		<< 4) +
+			(car_control.RTD				<<3) +
+			(comms_active.bms				<<2) +
+			(comms_active.inv1				<<1) +
+			(comms_active.inv2				<<0),
+
+			(ass.break_loop_pedal_invalid 	<< 4) +
+			(ass.break_loop_ts_deactive		<< 3) +
+			(ass.break_loop_timeout			<< 2) +
+			(ass.break_loop_precharge		<< 1) +
+			(ass.break_loop_inverter_error 	<< 0)
+		};
+
+		CAN_TxHeaderTypeDef header = {
+						.StdId = CAN_ID_TX_STATUS,
+						.ExtId = 0,
+						.IDE = CAN_ID_STD,
+						.RTR = CAN_RTR_DATA,
+						.DLC = 8,
+						.TransmitGlobalTime = DISABLE
+					};
+
 
 		uint32_t mailbox;
 
-		HAL_CAN_AddTxMessage(&hcan1, &header, data, &mailbox);
-		*/
+		HAL_CAN_AddTxMessage(&hcan1, &header, status_data, &mailbox);
+
 		tx_time.status = current_time_ms();
 	}
 }

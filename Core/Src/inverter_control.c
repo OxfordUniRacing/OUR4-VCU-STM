@@ -43,18 +43,12 @@
 #include "precharge.h"
 
 
-
-#define TRQ_LIMIT			(10*160)		//160 bits per nm
-#define RPM_LIMIT			(1000)
-
 #define BAT_RECHARGE_LIM	(-1)
 #define TARGET_CAP_VOLTAGE	(100*16)	//16 bits per V
 
 #define CONTROLWORLD_ENERGISE	(0x0003)
 #define CONTROLWORLD_ENABLE		(0x0005)
 #define CONTROLWORLD_SHUTDOWN	(0x0006)
-
-
 
 void transmit_HC1(
 				uint8_t dest_address,
@@ -105,12 +99,17 @@ void transmit_HC1(
 
 uint16_t car_torque(void)
 {
-	return (uint16_t) car_control.torque * 16;
+	uint16_t car_torque = car_control.torque * 16;
+	return car_torque;
 
 }
-uint16_t car_rpm(void)
+uint16_t inverter_rpm_limit(void)
 {
-	return 300;
+	return RPM_MAX;
+}
+uint16_t inverter_torque_limit(void)
+{
+	return TORQUE_MAX * 16;
 }
 
 
@@ -120,20 +119,20 @@ uint16_t car_rpm(void)
  */
 void update_HC1_drive(void)
 {
-	transmit_HC1(INV_RIGHT_ADDRESS, -1 * car_torque(), CONTROLWORLD_ENABLE, TRQ_LIMIT);
-	transmit_HC1(INV_LEFT_ADDRESS, car_torque(), CONTROLWORLD_ENABLE, TRQ_LIMIT);
+	transmit_HC1(INV_RIGHT_ADDRESS, -1 * car_torque(), CONTROLWORLD_ENABLE, inverter_torque_limit());
+	transmit_HC1(INV_LEFT_ADDRESS, car_torque(), CONTROLWORLD_ENABLE, inverter_torque_limit());
 }
 
 void update_HC1_energise(void)
 {
-	transmit_HC1(INV_RIGHT_ADDRESS, 0, CONTROLWORLD_ENERGISE, TRQ_LIMIT);
-	transmit_HC1(INV_LEFT_ADDRESS, 0, CONTROLWORLD_ENERGISE, TRQ_LIMIT);
+	transmit_HC1(INV_RIGHT_ADDRESS, 0, CONTROLWORLD_ENERGISE, inverter_torque_limit());
+	transmit_HC1(INV_LEFT_ADDRESS, 0, CONTROLWORLD_ENERGISE, inverter_torque_limit());
 }
 
 void update_HC1_shutdown(void)
 {
-	transmit_HC1(INV_RIGHT_ADDRESS, 0, CONTROLWORLD_SHUTDOWN, TRQ_LIMIT);
-	transmit_HC1(INV_LEFT_ADDRESS, 0, CONTROLWORLD_SHUTDOWN, TRQ_LIMIT);
+	transmit_HC1(INV_RIGHT_ADDRESS, 0, CONTROLWORLD_SHUTDOWN, inverter_torque_limit());
+	transmit_HC1(INV_LEFT_ADDRESS, 0, CONTROLWORLD_SHUTDOWN, inverter_torque_limit());
 }
 
 void transmit_HC2(
@@ -180,8 +179,8 @@ void transmit_HC2(
 
 void update_HC2(void)
 {
-	transmit_HC2(INV_RIGHT_ADDRESS, -1*TRQ_LIMIT, car_rpm(), -1 * car_rpm());
-	transmit_HC2(INV_LEFT_ADDRESS, -1*TRQ_LIMIT, car_rpm(), -1 * car_rpm());
+	transmit_HC2(INV_RIGHT_ADDRESS, -1*inverter_torque_limit(), inverter_rpm_limit(), -1 * inverter_rpm_limit());
+	transmit_HC2(INV_LEFT_ADDRESS, -1*inverter_torque_limit(), inverter_rpm_limit(), -1 * inverter_rpm_limit());
 }
 
 void transmit_HC3(
@@ -222,10 +221,17 @@ void transmit_HC3(
 	HAL_CAN_AddTxMessage(&hcan1, &header, data, &mailbox);
 }
 
+
+uint8_t inverter_current_limit(void)
+{
+	if(bms.pack_dlc/2 < INV_CURRENT_MAX) return bms.pack_dlc/2;
+	else return INV_CURRENT_MAX;
+}
+
 void update_HC3(void)
 {
-	transmit_HC3(INV_RIGHT_ADDRESS, bms.pack_dlc, BAT_RECHARGE_LIM, TARGET_CAP_VOLTAGE);
-	transmit_HC3(INV_LEFT_ADDRESS, bms.pack_dlc, BAT_RECHARGE_LIM, TARGET_CAP_VOLTAGE);
+	transmit_HC3(INV_RIGHT_ADDRESS, inverter_current_limit(), BAT_RECHARGE_LIM, TARGET_CAP_VOLTAGE);
+	transmit_HC3(INV_LEFT_ADDRESS, inverter_current_limit(), BAT_RECHARGE_LIM, TARGET_CAP_VOLTAGE);
 }
 
 
@@ -272,6 +278,12 @@ void parse_HS3(inv_t* inv, uint8_t data[])
 	int16_t measured_capacitor_voltage = 0;
 	measured_capacitor_voltage += data[4];
 	measured_capacitor_voltage += ((int16_t)data[5]) << 8;
+
+	int16_t motor_temp = 0;
+	motor_temp += data[2];
+	motor_temp += (int16_t)data[3] << 8;
+
+	inv->motor_temp = motor_temp;
 
 	inv->capacitor_voltage = (float)measured_capacitor_voltage / 16;
 }

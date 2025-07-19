@@ -3,6 +3,20 @@
 
 #include <stdbool.h>
 
+typedef enum{
+	PC_TS_OFF,                      //The TS is not active
+	PC_EMSDC_ON,                   //For handling the BMS relay
+	PC_WAIT_FOR_INVERTER,           //Waiting for communication from the inverters
+	PC_WAIT_FOR_INVERTER_ENERGISE,  //Waiting fot the inverters to enter "energised" state
+	PC_WAIT_FOR_INVERTER_ENABLED,   //Waiting for the inverters to enter "enabled" state
+	PC_WAIT_FOR_FINAL_VOLTAGE,      //Waiting for the inverter voltage to reach 95% of battery voltage
+	PC_WAIT_FOR_PRECHARGE_DISABLE,
+	PC_READY,                       //Ready to for BMS to exit precharge
+	PC_FAILED
+}precharge_t;
+
+extern precharge_t PRECHARGE_STATE;
+
 typedef struct {
 	// Inputs
 	float voltage;

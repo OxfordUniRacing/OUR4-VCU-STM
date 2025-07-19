@@ -1,6 +1,7 @@
 #include "main.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
 #include "pedals.h"
 
 #include "can.h"
@@ -16,9 +17,11 @@ analogs_t analogs = { 0 };
 
 void handle_analogs(void);
 void handle_inputs(void);
+void handle_brake(void);
 void handle_pedals(void);
 void handle_car_control(void);
 void handle_emsdc(void);
+void handle_apps_brake_plausability(void);
 
 void app_init(void)
 {
@@ -38,7 +41,9 @@ void app_init(void)
 	  HAL_CAN_ConfigFilter(&hcan1, &filter);
 	  HAL_CAN_Start(&hcan1);
 
+	  printf("car on \n\r");
 
+	  //init_logging();
 
 }
 
@@ -53,6 +58,8 @@ void app_main(void)
 	handle_precharge();
 
 	handle_analogs();
+
+	handle_brake();
 
 	handle_can();
 
@@ -69,6 +76,10 @@ void app_main(void)
 	handle_car_control();
 
 	handle_emsdc();
+
+	handle_apps_brake_plausability();
+
+	//handle_logging();
 
 #ifdef DEBUG_PRINT_LOOP_TIMES
 	time_us = current_time_10us() - time_us;
@@ -95,8 +106,8 @@ void app_main(void)
 
 	//HAL_GPIO_TogglePin(GPIOD,BRAKE_CTRL_Pin);
 	//HAL_GPIO_TogglePin(GPIOC,PUSH_PULL_1_Pin);	//Toggles Relay
-	//HAL_GPIO_TogglePin(GPIOC,GDO_LOW_2_Pin);		//RHS FAN
-
+	//HAL_GPIO_WritePin(GPIOB,GDO_LOW_3_Pin,GPIO_PIN_SET);		//RHS FAN
+	//HAL_GPIO_WritePin(GPIOB,GDO_LOW_5_Pin,GPIO_PIN_SET);		//RHS FAN
 	// Handle PIO
 
 	//GPIO E
@@ -171,7 +182,7 @@ void handle_car_control(void)
 	// If Ignition is pressed for more than 1s, than start precharge
 	static bool old_IGN;
 	static uint32_t IGN_pressed_time;
-	if(car_control.IGN_Switch & !car_control.RTD) // If RTD is pressed, do not progress
+	if(car_control.IGN_Switch & !car_control.RTD_Switch) // If RTD is pressed, do not progress
 	{
 		if(!old_IGN) IGN_pressed_time = current_time_ms();	//If we have gone from low -> high state, start timer
 		else if(has_delay_passed(IGN_pressed_time, IGN_HOLD_TIME)) car_control.precharge_start = true;	//Otherwise if we have waited 1s, then we can start precharge
@@ -194,7 +205,7 @@ void handle_car_control(void)
 		}
 		else
 		{
-			if(!car_control.RTD && !car_control.sounder_enable && !car_control.error_state)
+			if(!car_control.RTD && !car_control.sounder_enable && !car_control.error_state && car_control.brake_on)
 			{
 				// set timer for sounder
 				car_control.sounder_enable = true;
@@ -226,32 +237,51 @@ void handle_car_control(void)
 
 	if(car_control.RTD)
 	{
-		car_control.torque = car_control.user_pedal_value * 32 / 100;
-		// 0.0625Nm/bit 16 bits/Nm
+		// We have the first 10% of the pedal as a deadzone
+
+		if(car_control.user_pedal_value >= 10 && car_control.apps_brake_plausiblity)
+		{
+			car_control.torque = ((float)car_control.user_pedal_value - 10.0) * TORQUE_MAX / 90.0;
+		}
+		else
+		{
+			car_control.torque = 0;
+		}
+
+		if(!car_control.RTD_Switch)	car_control.RTD = false;
 	}
 	else
 	{
 		car_control.torque = 0;
 	}
-
 }
 
 
 void handle_emsdc(void)
 {
-
-
 	static bool ass_state = false;						// Current ass state
 	static bool old_ass_error = false;
 	static uint32_t ass_error_time = 0;
 
 	bool ass_error =								//True if there is an error that means the ass loop needs closing
 				ass.break_loop_ins_detect ||		//Not implemented
-				ass.break_loop_inverter_error ||	//Not implemented
+				ass.break_loop_inverter_error ||
 				ass.break_loop_pedal_invalid ||
 				ass.break_loop_precharge ||
 				ass.break_loop_timeout ||
-				ass.break_loop_ts_deactive;
+				ass.break_loop_ts_deactive
+				;
+
+
+	static bool old_emsdc = false;
+	if(	(true  == old_emsdc) && (false == car_control.EMSDC) )
+	{
+		ass.break_loop_ts_deactive = true;
+		ass_error = true;
+	}
+	old_emsdc = car_control.EMSDC;
+
+
 
 	if(ass_state)
 	{
@@ -280,7 +310,7 @@ void handle_emsdc(void)
 		}
 		if(ass.precharge_request_close && ass_error)
 		{
-			//printf("ASS ERROR\n\r");
+			ass_state = false;
 		}
 	}
 
@@ -297,33 +327,162 @@ void handle_emsdc(void)
 	old_ass_error = ass_error;
 }
 
+#define PEDAL_SAMPLING_TIME_10US 100
 
 void handle_pedals(void)
 {
-#define PEDAL_1_MIN 441.0f
-#define PEDAL_1_MAX 2014.0f
-#define PEDAL_2_MIN 1900.0f
-#define PEDAL_2_MAX 345.0f
+#define PEDAL_1_MIN 465.0f
+#define PEDAL_1_MAX 2161.0f
+#define PEDAL_2_MIN 2211.0f
+#define PEDAL_2_MAX 4094.0f
 
-#define PEDAL_1_SCALE (float)(100.0f / (PEDAL_1_MAX - PEDAL_1_MIN ))
-#define PEDAL_2_SCALE (float)(100.0f / (PEDAL_2_MAX - PEDAL_2_MIN ))
-
-
-	float pedal_1 = (analogs.pedal_1 - PEDAL_1_MIN) * PEDAL_1_SCALE;
-	float pedal_2 = (analogs.pedal_2 - PEDAL_2_MIN) * PEDAL_2_SCALE;
-
-	if( abs(pedal_1 - pedal_2) > 6)
+	static const float pedal_1_gains[12] =
 	{
-		// Set pedal error flag
-		car_control.user_pedal_value = 0;
-		ass.break_loop_pedal_invalid = true;
+			0.059701493,
+			0.068181818,
+			0.0625,
+			0.060606061,
+			0.056603774,
+			0.063829787,
+			0.061452514,
+			0.064,
+			0.061904762,
+			0.061135371,
+			0.058823529,
+			0.05982906
+	};
+	static const uint16_t pedal_1_positions[13] =
+	{
+			493,
+			761,
+			849,
+			945,
+			1044,
+			1203,
+			1156,
+			1335,
+			1460,
+			1670,
+			1899,
+			2018,
+			2135
+	};
+	static const uint16_t percentages[12] =
+	{
+			0,
+			16,
+			22,
+			28,
+			34,
+			43,
+			40,
+			51,
+			59,
+			72,
+			86,
+			93,
+	};
+
+static const float pedal_2_gains[12] =
+{
+		0.066666667,
+		0.072289157,
+		0.0625,
+		0.057692308,
+		0.056603774,
+		0.063829787,
+		0.063953488,
+		0.064516129,
+		0.064039409,
+		0.084337349,
+		0.031674208,
+		0.025830258
+};
+static const uint16_t pedal_2_positions[13] =
+{
+		2237,
+		2477,
+		2560,
+		2656,
+		2760,
+		2919,
+		2872,
+		3044,
+		3168,
+		3371,
+		3537,
+		3758,
+		4029
+};
+
+
+
+	static uint32_t pedal_fault_count = 0;
+	static uint16_t last_pedal_time_10us = 0;
+
+	if( (uint16_t)(current_time_10us() - last_pedal_time_10us) < PEDAL_SAMPLING_TIME_10US ) return;
+	last_pedal_time_10us = current_time_10us();
+
+	float pedal_1 = 0;
+	float pedal_2 = 0;
+
+	uint32_t i = 0;
+	for(i = 0; i < 13; i++)
+	{
+		if(i == 12)
+		{
+			pedal_1 = ((float)analogs.pedal_1 - pedal_1_positions[11]) * pedal_1_gains[11] + percentages[11];
+		}
+		else if(analogs.pedal_1 < pedal_1_positions[i+1])
+		{
+			pedal_1 = ((float)analogs.pedal_1 - pedal_1_positions[i]) * pedal_1_gains[i] + percentages[i];
+			break;
+		}
+	}
+	for(i = 0; i < 13; i++)
+	{
+		if(i == 12)
+		{
+			pedal_2 = ((float)analogs.pedal_2 - pedal_2_positions[11]) * pedal_2_gains[11] + percentages[11];
+		}
+		else if(analogs.pedal_2 < pedal_2_positions[i+1])
+		{
+			pedal_2 = ((float)analogs.pedal_2 - pedal_2_positions[i]) * pedal_2_gains[i] + percentages[i];
+			break;
+		}
+	}
+
+
+	#ifdef DEBUG_PRINT_PEDALS
+		static uint32_t count = 0;
+		count++;
+		if(count == 300)	//Display messages every 300ms
+		{
+			printf("Pedal1: %f, Pedal2: %f\n\r", pedal_1, pedal_2);
+			if(ass.break_loop_pedal_invalid) printf("PEDAL FAULT\n\r");
+			count = 0;
+		}
+	#endif
+
+
+	if( abs(pedal_1 - pedal_2) > 8)
+	{
+		pedal_fault_count++;
 	}
 	else if((pedal_1 > 105) | (pedal_2 > 105))
 	{
-		car_control.user_pedal_value = 0;
-		ass.break_loop_pedal_invalid = true;
+		pedal_fault_count++;
 	}
 	else if((pedal_1 < -5) | (pedal_2 < -5))
+	{
+		pedal_fault_count++;
+	}
+	else
+	{
+		pedal_fault_count = 0;
+	}
+
+	if(pedal_fault_count > 50)
 	{
 		car_control.user_pedal_value = 0;
 		ass.break_loop_pedal_invalid = true;
@@ -331,19 +490,62 @@ void handle_pedals(void)
 	else
 	{
 		car_control.user_pedal_value = (pedal_1 + pedal_2) / 2;
-		ass.break_loop_pedal_invalid = false;
 	}
 
-	//if(current_time_ms() % 100 == 0) printf("Pedal %u\n\r", car_control.user_pedal_value);
 }
 
-float calculate_user_torque(void)
+void handle_brake(void)
 {
-	return 0.0;
+	car_control.brake_pressure = analogs.brake_sens;
+
+	if(car_control.brake_pressure > BRAKE_PRESSURE_THRESHOLD)
+	{
+		car_control.brake_on = true;
+	}
+	else
+	{
+		car_control.brake_on = false;
+	}
+
+
+	HAL_GPIO_WritePin(GPIOD, BRAKE_CTRL_Pin, car_control.brake_on ? GPIO_PIN_SET : GPIO_PIN_RESET);
+}
+//##########################################################################################################
+#define APPS_SAMPLING_TIME_10US	100
+
+void handle_apps_brake_plausability(void)
+{
+
+	static uint16_t last_apps_time_10us = 0;
+
+	if( (uint16_t)(current_time_10us() - last_apps_time_10us) < APPS_SAMPLING_TIME_10US ) return;
+	last_apps_time_10us = current_time_10us();
+
+	static uint32_t fault_count = 0;
+
+	uint32_t power = bms.voltage * bms.current;
+
+	if(car_control.apps_brake_plausiblity)
+	{
+		if(car_control.brake_on && ( (power > 4500) || (car_control.user_pedal_value > 25) ) )		fault_count++;
+		else fault_count = 0;
+
+		if(fault_count > 450) car_control.apps_brake_plausiblity = false;
+	}
+	else
+	{
+		if(car_control.user_pedal_value <= 5)
+		{
+			fault_count = 0;
+			car_control.apps_brake_plausiblity = true;
+		}
+	}
 }
 
+
+//################################################################################################################
 #define ANALOG_SAMPLING_TIME_10US 10
-#define ANALOG_BUFFER_SIZE 128
+#define ANALOG_BUFFER_SIZE 1024
 
 
 void handle_analogs(void)
@@ -351,6 +553,7 @@ void handle_analogs(void)
 
 	//We want to sample every 100us and complete a 12.8ms rolling average
 
+	static bool startup = true;
 
 	static uint16_t last_analog_time_10us = 0;
 
@@ -400,20 +603,51 @@ void handle_analogs(void)
 
 	HAL_ADC_Stop(&hadc1);
 
-	analogs.LV_bat = lv_voltage_avg / ANALOG_BUFFER_SIZE;
-	analogs.pedal_1 = pedal_1_raw_avg / ANALOG_BUFFER_SIZE;
-	analogs.pedal_2 = pedal_2_raw_avg / ANALOG_BUFFER_SIZE;
-	analogs.brake_sens = brake_raw_avg / ANALOG_BUFFER_SIZE;
+	if(head >= ANALOG_BUFFER_SIZE-1)
+	{
+		head = 0;
+		startup = false;
+	}
+	else
+	{
+		head++;
+	}
 
-	if(head >= ANALOG_BUFFER_SIZE-1) head = 0;
-	else head++;
+	if(startup)	//If we haven't filled the full buffer, just divide by how much we have added
+	{
+		analogs.LV_bat = lv_voltage_avg / head;
+		analogs.pedal_1 = pedal_1_raw_avg / head;
+		analogs.pedal_2 = pedal_2_raw_avg / head;
+		analogs.brake_sens = brake_raw_avg / head;
+	}
+	else
+	{
+		analogs.LV_bat = lv_voltage_avg / ANALOG_BUFFER_SIZE;
+		analogs.pedal_1 = pedal_1_raw_avg / ANALOG_BUFFER_SIZE;
+		analogs.pedal_2 = pedal_2_raw_avg / ANALOG_BUFFER_SIZE;
+		analogs.brake_sens = brake_raw_avg / ANALOG_BUFFER_SIZE;
+	}
+
+	if(car_control.fans_on)
+	{
+		car_control.LV_Bat_voltage = analogs.LV_bat - 0.6;
+
+	}
+	else
+	{
+		car_control.LV_Bat_voltage = analogs.LV_bat - 0.19;
+
+	}
+
+
+
 
 	last_analog_time_10us = current_time_10us();
 
 #ifdef DEBUG_PRINT_ANALOGS
 	static uint32_t count = 0;
 	count++;
-	if(count == 10000/ANALOG_SAMPLING_TIME_10US)
+	if(count == 3000)
 	{
 		printf("LV: %lu, P1: %lu, P2: %lu, BRK: %lu\n\r", lv_voltage_avg / ANALOG_BUFFER_SIZE, pedal_1_raw_avg / ANALOG_BUFFER_SIZE, pedal_2_raw_avg / ANALOG_BUFFER_SIZE, brake_raw_avg / ANALOG_BUFFER_SIZE);
 		count = 0;
@@ -421,6 +655,11 @@ void handle_analogs(void)
 #endif
 }//
 
+
+void handle_fans(void)
+{
+
+}
 
 #define INPUT_SAMPLING_TIME_10US 	10
 #define DEBOUNCE_COUNT 				128
@@ -472,6 +711,16 @@ void handle_inputs(void)
 	{
 		printf("RTD: %u, IGN: %u EMSDC: %u\n\r", car_control.RTD_Switch, car_control.IGN_Switch, car_control.EMSDC);
 		count = 0;
+	}
+#endif
+
+#ifdef DEBUG_PRINT_COMMS
+	static uint32_t count_2 = 0;
+	count_2++;
+	if(count_2 == 10000/INPUT_SAMPLING_TIME_10US)
+	{
+		printf("INV1: %u, INV2: %u BMS: %u\n\r", comms_active.inv1 , comms_active.inv2, comms_active.bms);
+		count_2 = 0;
 	}
 #endif
 }

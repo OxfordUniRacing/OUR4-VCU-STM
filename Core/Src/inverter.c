@@ -5,6 +5,7 @@
 #include "inverter.h"
 #include "timer.h"
 #include "app.h"
+#include "precharge.h"
 
 //==========================DEFINITIONS
 
@@ -22,7 +23,6 @@ inv_t inv2;
 
 void handle_inverters(void)
 {
-
 	// If comms have broken to the inverters, set the voltage to default (0))
 	if (!comms_active.inv1)
 		inv1.capacitor_voltage = 0;
@@ -31,8 +31,13 @@ void handle_inverters(void)
 		inv2.capacitor_voltage = 0;
 
 	//If any inverters report a fault, stop the car.
-	inv1.fault_active = (inv1.statusword == STATUSWORD_FAULTREACTION);
-	inv2.fault_active = (inv2.statusword == STATUSWORD_FAULTREACTION);
+	inv1.fault_active = (	inv1.statusword == STATUSWORD_FAULTREACTION
+						||	inv1.statusword == STATUSWORD_FAULTOFF);
+
+	inv2.fault_active = (	inv2.statusword == STATUSWORD_FAULTREACTION
+						||	inv2.statusword == STATUSWORD_FAULTOFF);
+
+	ass.break_loop_inverter_error = inv1.fault_active || inv2.fault_active;
 }
 
 float get_inv_lowest_voltage(void)

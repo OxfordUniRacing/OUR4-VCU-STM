@@ -15,5 +15,7 @@ void parse_HS1(inv_t* inv, uint8_t data[]);
 void parse_HS2(inv_t* inv, uint8_t data[]);
 void parse_HS3(inv_t* inv, uint8_t data[]);
 
+uint8_t inverter_current_limit(void);
+
 
 #endif

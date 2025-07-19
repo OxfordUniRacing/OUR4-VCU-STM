@@ -32,16 +32,25 @@
 
 //#define DEBUG_PRINT_ANALOGS
 
-// ========================= GLOBAL PARAMETERS ===========================
+//#define DEBUG_PRINT_PEDALS
 
-#define THROTTLE_SCALE_DOWN 10
+//#define DEBUG_PRINT_COMMS
+
+// ========================= GLOBAL PARAMETERS ===========================
 
 #define ASS_CLOSED 1
 #define ASS_OPEN 0
 #define TS_ACTIVE_BOUNCE_TIME 2000
 #define RTD_SOUND_TIME 2500
 #define ASS_LOOP_STOP_TIME  300
-#define BRAKE_PRESSURE_THRESHOLD 2.0f //Threshold to consider the brakes active (BAR)
+#define BRAKE_PRESSURE_THRESHOLD 650
+
+#define INV_CURRENT_MAX ((uint16_t)150)
+//#define RPM_MAX			((uint16_t)8000)
+//#define TORQUE_MAX		35.0
+
+#define RPM_MAX			((uint16_t)6000)
+#define TORQUE_MAX		35.0
 
 #define INV_RIGHT_ADDRESS	(0x71)	//INV1
 #define INV_LEFT_ADDRESS	(0x72)	//INV2
@@ -103,14 +112,20 @@ typedef struct
 
     bool error_state;
 
+    bool apps_brake_plausiblity;									//True if ok, false if 0 torque (EV2.3)
+
+    bool fans_on;
+
 	//User values
 	uint8_t user_pedal_value;
     float user_steering_value;
     bool brake_on;																//True when the current brake pressure is above the brake threshold
-    float brake_pressure;
+    uint16_t brake_pressure;
 
     float torque;
     float rpm_limit;
+
+    uint16_t LV_Bat_voltage;
 
     //car state data
     float yaw_rate;
