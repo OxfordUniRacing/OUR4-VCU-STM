@@ -45,12 +45,13 @@
 #define ASS_LOOP_STOP_TIME  300
 #define BRAKE_PRESSURE_THRESHOLD 650
 
-#define INV_CURRENT_MAX ((uint16_t)150)
-//#define RPM_MAX			((uint16_t)8000)
-//#define TORQUE_MAX		35.0
+#define INV_CURRENT_MAX ((uint16_t)130)
+#define RPM_MAX			((uint16_t)5000)
+#define TORQUE_MAX		30.0
 
-#define RPM_MAX			((uint16_t)6000)
-#define TORQUE_MAX		35.0
+#define INV_TEMP_CUTBACK	(86)
+#define FAN_TURNON_TEMP		(40)
+#define FAN_TURNOFF_TEMP	(35)
 
 #define INV_RIGHT_ADDRESS	(0x71)	//INV1
 #define INV_LEFT_ADDRESS	(0x72)	//INV2

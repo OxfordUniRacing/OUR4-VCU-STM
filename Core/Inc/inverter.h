@@ -18,6 +18,7 @@ typedef struct {
 	float measured_torque;
 	int16_t measured_motor_speed;
 	int16_t battery_current;
+	int16_t temp;
 	int16_t motor_temp;
 
 	float available_forward_torque;

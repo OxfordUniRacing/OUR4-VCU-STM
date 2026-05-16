@@ -102,7 +102,7 @@ void print_items(struct msdCard* card)
 
 	while(block < card->_write_pos)
 	{
-		read_block(card, temp_char, block);
+//		read_block(card, temp_char, block);
 		printf(temp_char);
 		printf("\n\r");
 	}

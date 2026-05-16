@@ -275,6 +275,10 @@ void parse_HS2(inv_t* inv, uint8_t data[])
 
 void parse_HS3(inv_t* inv, uint8_t data[])
 {
+	int16_t temp = 0;
+	temp += data[0];
+	temp += ((uint16_t)data) << 8;
+
 	int16_t measured_capacitor_voltage = 0;
 	measured_capacitor_voltage += data[4];
 	measured_capacitor_voltage += ((int16_t)data[5]) << 8;
@@ -284,6 +288,7 @@ void parse_HS3(inv_t* inv, uint8_t data[])
 	motor_temp += (int16_t)data[3] << 8;
 
 	inv->motor_temp = motor_temp;
+	inv->temp = temp - INV_TEMP_CUTBACK;
 
 	inv->capacitor_voltage = (float)measured_capacitor_voltage / 16;
 }

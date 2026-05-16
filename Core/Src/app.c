@@ -23,6 +23,9 @@ void handle_car_control(void);
 void handle_emsdc(void);
 void handle_apps_brake_plausability(void);
 
+void handle_fans(void);
+
+
 void app_init(void)
 {
 	CAN_FilterTypeDef filter = {
@@ -50,34 +53,45 @@ void app_init(void)
 void app_main(void)
 {
 
+
+	HAL_Delay(100);
+	printf("hello\n\r");
+
 #ifdef DEBUG_PRINT_LOOP_TIMES
 	uint16_t time_us = current_time_10us();
 #endif
 
+//
+//	handle_precharge();
+//
+//	handle_analogs();
+//
+//	handle_brake();
+//
+//	handle_can();
+//
+//	handle_inverters();
+//
+//	handle_timeouts();
+//
+//	handle_tx_timer();
+//
+//	handle_inputs();
+//
+//	handle_pedals();
+//
+//	handle_car_control();
+//
+//	handle_emsdc();
+//
+//	handle_apps_brake_plausability();
+//
+//	handle_fans();
 
-	handle_precharge();
 
-	handle_analogs();
 
-	handle_brake();
+	//__delay_ms(10);
 
-	handle_can();
-
-	handle_inverters();
-
-	handle_timeouts();
-
-	handle_tx_timer();
-
-	handle_inputs();
-
-	handle_pedals();
-
-	handle_car_control();
-
-	handle_emsdc();
-
-	handle_apps_brake_plausability();
 
 	//handle_logging();
 
@@ -465,15 +479,16 @@ static const uint16_t pedal_2_positions[13] =
 	#endif
 
 
+
 	if( abs(pedal_1 - pedal_2) > 8)
 	{
 		pedal_fault_count++;
 	}
-	else if((pedal_1 > 105) | (pedal_2 > 105))
+	else if((pedal_1 > 125) | (pedal_2 > 125))
 	{
 		pedal_fault_count++;
 	}
-	else if((pedal_1 < -5) | (pedal_2 < -5))
+	else if((pedal_1 < -10) | (pedal_2 < -10))
 	{
 		pedal_fault_count++;
 	}
@@ -481,6 +496,11 @@ static const uint16_t pedal_2_positions[13] =
 	{
 		pedal_fault_count = 0;
 	}
+
+	if(pedal_1 > 100) pedal_1 = 100;
+	if(pedal_2 > 100) pedal_2 = 100;
+	if(pedal_1 < 0 ) pedal_1 = 0;
+	if(pedal_2 < 0) pedal_2 = 0;
 
 	if(pedal_fault_count > 50)
 	{
@@ -630,12 +650,12 @@ void handle_analogs(void)
 
 	if(car_control.fans_on)
 	{
-		car_control.LV_Bat_voltage = analogs.LV_bat - 0.6;
+		car_control.LV_Bat_voltage = analogs.LV_bat + 0.6;
 
 	}
 	else
 	{
-		car_control.LV_Bat_voltage = analogs.LV_bat - 0.19;
+		car_control.LV_Bat_voltage = analogs.LV_bat + 0.19;
 
 	}
 
@@ -658,6 +678,28 @@ void handle_analogs(void)
 
 void handle_fans(void)
 {
+	if(!car_control.fans_on)
+	{
+		if(
+			(FAN_TURNON_TEMP < inv1.motor_temp) ||
+			(FAN_TURNON_TEMP < inv1.temp) ||
+			(FAN_TURNON_TEMP < inv2.motor_temp) ||
+			(FAN_TURNON_TEMP < inv2.temp)
+			)car_control.fans_on = true;
+	}
+	else
+	{
+		if(
+			(FAN_TURNOFF_TEMP > inv1.motor_temp) &&
+			(FAN_TURNOFF_TEMP > inv1.temp) &&
+			(FAN_TURNOFF_TEMP > inv2.motor_temp) &&
+			(FAN_TURNOFF_TEMP > inv2.temp)
+			)car_control.fans_on = false;
+
+	}
+
+	HAL_GPIO_WritePin(GPIOB,GDO_LOW_3_Pin, car_control.fans_on ? GPIO_PIN_SET: GPIO_PIN_RESET);
+	HAL_GPIO_WritePin(GPIOB,GDO_LOW_5_Pin, car_control.fans_on ? GPIO_PIN_SET: GPIO_PIN_RESET);
 
 }
 
