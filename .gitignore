@@ -61,3 +61,6 @@ release
 *.su
 *.idb
 *.pdb
+
+# Backup snapshot of idf.py configuration
+sdkconfig.old

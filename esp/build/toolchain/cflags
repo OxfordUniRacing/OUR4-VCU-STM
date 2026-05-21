@@ -1,0 +1,3 @@
+-march=rv32imc_zicsr_zifencei
+-mtune=esp-base
+"-specs=/home/matthewzahra/coding/OUR4-VCU-STM/esp/build/specs/picolibc.specs"

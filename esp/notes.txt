@@ -1,0 +1,9 @@
+to flash and monitor using idf.py:
+
+first activate idf.py with source <location of export.sh> and then set the target to the correct chip architecture:
+
+idf.py set-target esp32c3
+
+
+idf.py build
+idf.py -p /dev/ttyACM0 flash monitor
