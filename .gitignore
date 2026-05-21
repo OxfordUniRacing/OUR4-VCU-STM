@@ -64,3 +64,6 @@ release
 
 # Backup snapshot of idf.py configuration
 sdkconfig.old
+
+# idf.py build stuff
+**/build/

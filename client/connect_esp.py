@@ -5,7 +5,6 @@ open a web socket connection to the ESP32
 import asyncio
 import websockets
 
-# TODO - fill this in
 esp_address = 'ws://192.168.4.1/ws'
 
 async def sender(ws):

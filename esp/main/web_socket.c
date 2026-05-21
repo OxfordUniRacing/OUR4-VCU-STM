@@ -15,10 +15,15 @@
 
 #include <stdio.h>
 
+#include "flash.h"
+
 static const char *WS_TAG = "ws_server";
 static const char *WIFI_TAG = "wifi_server";
 static const char *SERVER_TAG = "http_server";
 
+
+static FILE *file_handle = NULL;            // file handle for where we want to save the binary in SPIFFS
+static bool receiving_binary = false;           // indicates that we are streaming binary chunks over the websocket 
 
 // initialise the ESP as a soft access point (basically emit wifi)
 static void init_wifi_softap(void)
@@ -33,7 +38,7 @@ static void init_wifi_softap(void)
 	// configure how we want the wifi to broadcast
 	wifi_config_t wifi_ap_config = {
 		.ap = {
-			.ssid = "OUR_ESP32_WS_SERVER",
+			.ssid = "car_go_zoom",
 			.ssid_len = 0, // TODO - think this is fine but check?
 			.channel = 1, 									// a post-brexit european channel
 			.password = "freddie_is_a_good_boy",	// TODO - put this in a config file...
@@ -57,31 +62,81 @@ static esp_err_t ws_handler(httpd_req_t *req){
     httpd_ws_frame_t ws_pkt;
     memset(&ws_pkt, 0, sizeof(ws_pkt));
 
-    // First: get frame length
+    // get frame length
     ESP_ERROR_CHECK(httpd_ws_recv_frame(req, &ws_pkt, 0));
 
-    if (ws_pkt.len == 0) {
+    if (ws_pkt.len == 0) { // nothing to do
         return ESP_OK;
     }
 
+    // allocate space for the buffrew 
     uint8_t *buf = calloc(1, ws_pkt.len + 1);
     if (!buf) return ESP_ERR_NO_MEM;
 
     ws_pkt.payload = buf;
 
-    // Now read payload
+    // Now read payload into buf
     ESP_ERROR_CHECK(httpd_ws_recv_frame(req, &ws_pkt, ws_pkt.len));
 
-    // Prepare response (IMPORTANT: clean struct usage)
-    httpd_ws_frame_t resp;
-    memset(&resp, 0, sizeof(resp));
+    // check if this is the start of a transfer
+    if (ws_pkt.type == HTTPD_WS_TYPE_TEXT && ws_pkt.len == 5 &&  memcmp(buf, "START", 5) == 0){
+        ESP_LOGI(WS_TAG, "Binary Transfer Initiated");
 
-    resp.payload = buf;
-    resp.len = ws_pkt.len;
-    resp.type = HTTPD_WS_TYPE_TEXT;
-    resp.final = true;
+        if (file_handle != NULL){
+            ESP_LOGW(WS_TAG, "Closing file handle that was left open");
+            fclose(file_handle);
+        }
 
-    httpd_ws_send_frame(req, &resp);
+        clear_binary();
+        file_handle = fopen(FILE_LOCATION, "wb");
+
+        if (!file_handle){
+            ESP_LOGE(WS_TAG, "Failed to open file for writing");
+            free(buf);
+            return ESP_FAIL;
+        }
+
+        receiving_binary = true;
+        free(buf);
+        return ESP_OK;
+    }
+
+    // check if a transfer has ended
+    if (ws_pkt.type == HTTPD_WS_TYPE_TEXT && ws_pkt.len == 5 &&  memcmp(buf, "END", 3) == 0){
+        ESP_LOGI(WS_TAG, "Binary Transfer Fimished");
+
+        if (file_handle) {
+            fclose(file_handle);
+            file_handle = NULL;
+        }
+
+        receiving_binary = false;
+        free(buf);
+
+        // TODO - put the logic here to initiate the STM flashing - uncomment when ready
+        // flash_stm();
+
+        return ESP_OK;
+    }
+
+    // received a binary chunk to save
+    if (ws_pkt.type == HTTPD_WS_TYPE_BINARY && receiving_binary){
+        ESP_LOGI(WS_TAG, "Binary Chunk Received");
+
+        if (save_binary_chunk(file_handle, buf, ws_pkt.len) == 0){
+            ESP_LOGI(WS_TAG, "Chunk succesfully saved");
+        } 
+    }
+
+    // httpd_ws_frame_t resp;
+    // memset(&resp, 0, sizeof(resp));
+
+    // resp.payload = buf;
+    // resp.len = ws_pkt.len;
+    // resp.type = HTTPD_WS_TYPE_TEXT;
+    // resp.final = true;
+
+    // httpd_ws_send_frame(req, &resp);
 
     free(buf);
     return ESP_OK;
