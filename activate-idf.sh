@@ -1,2 +1,2 @@
 # TODO - change to location of export.sh file
-source ~/eps/eps-idf/export.sh
+source ~/esp/esp-idf/export.sh
