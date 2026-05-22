@@ -16,6 +16,7 @@
 #include <stdio.h>
 
 #include "flash.h"
+#include "stm_pro_mode.h"
 
 static const char *WS_TAG = "ws_server";
 static const char *WIFI_TAG = "wifi_server";
@@ -102,7 +103,7 @@ static esp_err_t ws_handler(httpd_req_t *req){
     }
 
     // check if a transfer has ended
-    if (ws_pkt.type == HTTPD_WS_TYPE_TEXT && ws_pkt.len == 5 &&  memcmp(buf, "END", 3) == 0){
+    if (ws_pkt.type == HTTPD_WS_TYPE_TEXT && ws_pkt.len == 3 &&  memcmp(buf, "END", 3) == 0){
         ESP_LOGI(WS_TAG, "Binary Transfer Fimished");
 
         if (file_handle) {
@@ -126,6 +127,9 @@ static esp_err_t ws_handler(httpd_req_t *req){
         if (save_binary_chunk(file_handle, buf, ws_pkt.len) == 0){
             ESP_LOGI(WS_TAG, "Chunk succesfully saved");
         } 
+        else{
+            ESP_LOGE(WS_TAG, "Failed to save a chunk");
+        }
     }
 
     // httpd_ws_frame_t resp;
@@ -188,5 +192,6 @@ void app_main(void)
 	esp_netif_init(); // init the network interface abstraciton layer
 	esp_event_loop_create_default(); // create the global event loop
 	init_wifi_softap(); // init the access point
+    initSPIFFS(); // mount the file system so that we can write to it
 	start_server();
 }

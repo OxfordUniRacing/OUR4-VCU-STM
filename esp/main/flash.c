@@ -65,11 +65,10 @@ int save_binary_chunk(FILE *f, uint8_t *data, int len){
 void init_flash(void){
 	initFlashUART(); 	// set up uart to talk to the STM
     initGPIO();			// sort out the GPIO pins including setting BOOT0 to high, which puts STM into bootloader mode
-    initSPIFFS();		// mount the spiffs filesystem so that we can read and write 
 }
 
 void flash_stm(){
-	init_flash();					// setup uart, pins and file system
+	init_flash();					// setup uart, pins
 
 	flashSTM("/spiffs/stm_binary.bin");		// TODO - Maybe we need to prepend "/spiffs/"
 	
