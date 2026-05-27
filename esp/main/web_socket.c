@@ -115,7 +115,7 @@ static esp_err_t ws_handler(httpd_req_t *req){
         free(buf);
 
         // TODO - put the logic here to initiate the STM flashing - uncomment when ready
-        // flash_stm();
+        flash_stm();
 
         return ESP_OK;
     }
