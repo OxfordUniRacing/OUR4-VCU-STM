@@ -40,8 +40,8 @@
 #define UART_BUF_SIZE 1024
 #define UART_CONTROLLER UART_NUM_1
 
-#define RESET_PIN (GPIO_NUM_0) //(GPIO_NUM_12)
-#define BOOT0_PIN (GPIO_NUM_1) //(GPIO_NUM_2)
+#define RESET_PIN (GPIO_NUM_1)
+#define BOOT0_PIN (GPIO_NUM_0)
 #define HIGH 1
 #define LOW 0
 
